@@ -1,147 +1,58 @@
-# Disaster Tweet Classification: Project Summary
+# Disaster Social Media Classification: Project Summary
 
 ## Overview
 
-This project builds a system that reads a tweet and decides whether it is about a **real disaster** or **not**. It is a binary classification problem:
+The notebook classifies text as disaster-related (`1`) or not disaster-related (`0`). It preserves the Twitter workflow and adds an experimental path for Instagram and Facebook-style captions.
 
-- **1** means the tweet is about a real disaster
-- **0** means the tweet is not about a real disaster
+## Data and limitation
 
-The overall workflow is:
+- `train.csv` is the original labeled Twitter dataset and remains unchanged.
+- `test.csv` contains unlabeled tweets used to create `submission.csv`.
+- `social_posts_test.csv` contains 40 **synthetic**, labeled Instagram/Facebook-style examples. With seed `42`, the notebook holds out 10 examples (5 per class) and adds the other 30 (15 per class) to the tweet training split.
 
-**Tweet → Clean Text → TF-IDF → Model → Prediction → Evaluation**
+This means the training data is still dominated by tweets: the underlying labeled corpus is Twitter data, with only 30 synthetic social examples added in the current notebook run. Synthetic examples do not establish real-world cross-platform accuracy. Replace or add real, labeled Instagram/Facebook posts and keep a separate real-world holdout to measure performance on those platforms.
 
-Two models are built and compared: a traditional machine learning model (Logistic Regression) and a simple neural network.
+## Text processing and model
 
----
+`clean_text()` lowercases text, removes URLs and mentions, separates camel-case hashtags, removes platform filler phrases, and normalizes repeated letters, punctuation, and emoji.
 
-## Step 1: Importing the Tools
+The notebook uses a stratified 80/20 split of the Twitter training data and a fixed random seed (`42`). TF-IDF is fit only on the combined training text, with up to 5,000 unigrams and bigrams. Its custom English stop-word list keeps `not`, `no`, `now`, and `under`.
 
-The project uses three groups of tools:
+Two classifiers are trained:
 
-- **pandas** for loading and handling the data
-- **scikit-learn** for splitting data, converting text to numbers, building the Logistic Regression model, and measuring performance
-- **TensorFlow/Keras** for building and training the neural network
+- Logistic Regression as a baseline.
+- A TensorFlow/Keras neural network with 64 ReLU units and a sigmoid output, trained with Adam and binary cross-entropy for five epochs.
 
----
+## Cross-platform evaluation
 
-## Step 2: Loading the Dataset
+The neural network is evaluated on the Twitter validation split and the 10 held-out synthetic social posts. In the current seeded run:
 
-Two files are used:
+| Evaluation set | Examples scored | Accuracy | Precision | Recall | F1 |
+|---|---:|---:|---:|---:|---:|
+| Twitter validation | 1,523 | 79.65% | 78.48% | 72.48% | 75.36% |
+| Synthetic Instagram/Facebook holdout | 10 | 90.00% | 83.33% | 100.00% | 90.91% |
 
-- **Training file:** contains the tweets along with their correct labels (disaster or not)
-- **Test file:** contains tweets without labels, which the final model must predict
+All 10 social holdout examples had known vocabulary and were scored. These results describe this small, synthetic test only; they must not be presented as real-world Instagram or Facebook accuracy.
 
-The size of both datasets is checked and the first few rows are displayed to understand what the data looks like.
+## Using `predict_posts()`
 
----
+Run the notebook through the cell that defines `predict_posts()`. Pass a pandas DataFrame containing a `text` column. A `platform` column is optional:
 
-## Step 3: Cleaning the Tweets
+```python
+posts = pd.DataFrame({
+    "platform": ["Instagram", "Facebook"],
+    "text": [
+        "Evacuation notice issued after the wildfire moved closer to town.",
+        "Sunday brunch with friends and fresh waffles.",
+    ],
+})
 
-Raw tweets are messy, so they are cleaned to make them easier for a model to learn from. The cleaning process:
+predictions = predict_posts(posts)
+predictions[["platform", "text", "prediction", "disaster_probability"]]
+```
 
-- Converts all text to lowercase so "Fire" and "fire" are treated as the same word
-- Removes web links
-- Removes @mentions
-- Removes numbers, punctuation, and special symbols
-- Removes extra spaces
+The function returns the original columns plus `prediction` and `disaster_probability`. Predictions are `1` (disaster) or `0` (not disaster) when the cleaned post has known TF-IDF terms. If it has no known vocabulary, the prediction is `"uncertain"` and the probability is missing. The notebook's interactive section accepts one post at a time and exits when the user types `quit`.
 
-The same cleaning is applied to both the training and test tweets. An example tweet is shown before and after cleaning to confirm that it works.
+## Running the project
 
----
-
-## Step 4: Splitting the Data
-
-The training data is divided into two parts:
-
-- **80% for training**, which is what the model learns from
-- **20% for validation**, which is used to check how well the model performs on tweets it has never seen
-
-The split keeps the same proportion of disaster and non-disaster tweets in both parts (stratified split), and a fixed random seed makes the results reproducible.
-
----
-
-## Step 5: Converting Text into Numbers (TF-IDF)
-
-Machine learning models cannot work with words directly, so each tweet is converted into numbers using **TF-IDF** (Term Frequency, Inverse Document Frequency).
-
-TF-IDF gives each word a score based on two ideas:
-
-- Words that appear often in a tweet are more important to that tweet
-- Words that appear in almost every tweet carry less meaning and get a lower score
-
-Key settings used:
-
-- Only the **5,000 most useful words** are kept
-- Common English filler words (such as "the", "is", "and") are removed
-
-The vocabulary is learned from the training tweets only, then applied to the validation and test tweets. This avoids leaking information from unseen data into training.
-
----
-
-## Step 6: Model 1, Logistic Regression (Baseline)
-
-Logistic Regression is a simple and well-known classification method. It serves as the **baseline**, a reference point against which the more complex neural network can be compared.
-
-The model is trained on the TF-IDF features of the training tweets, then used to predict labels for the validation tweets. Its performance is measured using:
-
-- **Accuracy:** the share of tweets classified correctly
-- **Classification report:** precision, recall, and F1-score for each class
-
----
-
-## Step 7: Model 2, Simple Neural Network
-
-A small neural network is built with three parts:
-
-1. **Input layer:** receives the 5,000 TF-IDF features of a tweet
-2. **Hidden layer:** 64 neurons using the **ReLU** activation, which helps the network learn non-linear patterns
-3. **Output layer:** a single neuron using the **Sigmoid** activation, which produces a value between 0 and 1 that can be read as the probability that the tweet is about a disaster
-
-The network is set up with:
-
-- **Adam optimizer**, which adjusts the network's weights efficiently during learning
-- **Binary cross-entropy loss**, the standard way to measure error for yes/no problems
-- **Accuracy** as the metric to track
-
-It is then trained for **5 epochs** (5 full passes through the training data) in batches of 32 tweets, while the validation data is monitored after each epoch.
-
----
-
-## Step 8: Evaluating the Neural Network
-
-After training, the network predicts a probability for each validation tweet. Any probability of **0.5 or higher** is treated as a disaster tweet, and anything lower as not a disaster. The predictions are then compared to the true labels using the same accuracy score and classification report used for Logistic Regression.
-
----
-
-## Step 9: Comparing the Models
-
-The accuracy of Logistic Regression and the neural network is placed side by side in a small table. This shows whether the added complexity of a neural network improves results over the simple baseline.
-
----
-
-## Step 10: Predicting the Test Tweets
-
-The neural network is used to classify every tweet in the test file. Using the same 0.5 threshold, each tweet is labelled as disaster or not. The results are saved in a **submission file** with two columns:
-
-- **id:** the tweet's identifier
-- **target:** the predicted label (0 or 1)
-
----
-
-## Conclusion
-
-The project shows a complete text classification workflow, from raw tweets to final predictions. TF-IDF turns text into numbers, Logistic Regression provides a simple baseline, and the neural network learns patterns from those numerical features.
-
-### Main Concepts Demonstrated
-
-- Text preprocessing
-- TF-IDF feature extraction
-- Binary classification
-- Neural networks
-- ReLU and Sigmoid activation functions
-- Model training
-- Model evaluation (accuracy, precision, recall, F1-score)
-- Generating final predictions
-
-> **Note:** The notebook as provided contains no saved output, so this summary describes what was done at each step rather than the specific accuracy scores obtained.
+Install the dependencies in the project virtual environment with `python -m pip install -r requirements.txt`, then open `disaster_social_media_handler.ipynb` in VS Code and select the project `.venv` kernel. Run its cells in order. The notebook predicts the unlabeled tweets in `test.csv` and saves them to `submission.csv`.

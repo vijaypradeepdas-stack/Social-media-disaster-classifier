@@ -1,139 +1,72 @@
-# Social-media-disaster-classifier
+# Social Media Disaster Classifier
 
-A binary text classification project that reads a tweet and predicts whether it is about a **real disaster** or **not**.
+This project predicts whether a social media post is about a real disaster:
 
-- **1** → tweet is about a real disaster
-- **0** → tweet is not about a real disaster
+- `1` means disaster-related.
+- `0` means not disaster-related.
 
-The full workflow:
+The notebook keeps the original Twitter pipeline and demonstrates predictions for Instagram and Facebook-style captions.
 
+## Data and cross-platform limitation
 
-Two models are built and compared:
-- **Logistic Regression** (baseline)
-- **Simple Neural Network** (TensorFlow/Keras)
+- `train.csv` contains the original labeled Twitter data; it has not been changed.
+- `test.csv` contains unlabeled tweets. The notebook predicts these and writes `submission.csv`.
+- `social_posts_test.csv` contains 40 **synthetic** Instagram/Facebook examples, not real user posts. The notebook splits them reproducibly into 30 training examples and 10 held-out evaluation examples. Only the 30 training examples are added to the tweet training data.
 
----
+The model is still based primarily on tweets. Adding a small number of synthetic captions is not enough to establish real Instagram or Facebook performance. Replace or supplement the synthetic examples with real, carefully labeled posts and preserve a separate real-world holdout before drawing conclusions.
 
-## 📁 Project Structure
+## Pipeline
 
+1. Clean text by lowercasing, removing links and mentions, splitting hashtags, removing filler phrases, and normalizing punctuation and emoji.
+2. Split the Twitter data into a stratified 80% training set and 20% validation set. A fixed seed (`42`) is used.
+3. Fit TF-IDF on the combined tweet-training and social-training text. It keeps up to 5,000 unigrams and bigrams. Its custom English stop-word list keeps `not`, `no`, `now`, and `under`.
+4. Train Logistic Regression and a small TensorFlow/Keras neural network. The neural network uses 64 ReLU units, a sigmoid output, Adam, and five epochs.
+5. Evaluate on the Twitter validation split and the held-out social examples. The social metrics exclude posts with no known TF-IDF vocabulary; those posts are reported as uncertain.
 
----
+## Current evaluation
 
-## 🧰 Tools Used
+These results are from the notebook's seeded run after adding the 30 synthetic social training examples:
 
-- **pandas** — loading and handling data
-- **scikit-learn** — train/test split, TF-IDF, Logistic Regression, evaluation metrics
-- **TensorFlow / Keras** — building and training the neural network
+| Evaluation set | Examples scored | Accuracy | Precision | Recall | F1 |
+|---|---:|---:|---:|---:|---:|
+| Twitter validation | 1,523 | 79.65% | 78.48% | 72.48% | 75.36% |
+| Synthetic Instagram/Facebook holdout | 10 | 90.00% | 83.33% | 100.00% | 90.91% |
 
----
+All 10 held-out synthetic posts had known vocabulary in this run. These small synthetic-set metrics are **not real-world accuracy**.
 
-## 🚀 Pipeline
+## Predict Instagram/Facebook-style posts
 
-### 1. Load the Dataset
-- **Training file:** tweets with correct labels
-- **Test file:** tweets without labels, to be predicted
+Run the notebook cells in order through the section that defines `predict_posts`. Pass a pandas DataFrame with a `text` column; a `platform` column is optional:
 
-### 2. Clean the Tweets
-Raw tweets are messy, so the following cleaning steps are applied to both training and test data:
-- Convert text to lowercase
-- Remove URLs
-- Remove `@mentions`
-- Remove numbers, punctuation, and special symbols
-- Remove extra whitespace
+```python
+posts = pd.DataFrame({
+    "platform": ["Instagram", "Facebook"],
+    "text": [
+        "Evacuation notice issued after the wildfire moved closer to town.",
+        "Sunday brunch with friends and fresh waffles.",
+    ],
+})
 
-### 3. Split the Data
-- **80%** training
-- **20%** validation
-- Stratified split + fixed random seed for reproducibility
+predictions = predict_posts(posts)
+predictions[["platform", "text", "prediction", "disaster_probability"]]
+```
 
-### 4. Convert Text to Numbers (TF-IDF)
-Each tweet is converted into numerical features using **TF-IDF**:
-- Keeps only the **5,000 most useful words**
-- Removes common English stopwords
-- Vocabulary learned **only from training data** to avoid leakage
+The returned DataFrame includes `prediction` and `disaster_probability`. A post with no known TF-IDF vocabulary is marked `"uncertain"` and gets a missing probability instead of a misleading score. The interactive section also accepts posts one at a time; type `quit` to exit.
 
-### 5. Model 1 — Logistic Regression (Baseline)
-A simple, well-known classifier used as a reference point.
-Evaluated using:
-- **Accuracy**
-- **Classification report** (precision, recall, F1-score)
+## Run the notebook
 
-### 6. Model 2 — Simple Neural Network
-| Layer | Details |
-|-------|---------|
-| Input | 5,000 TF-IDF features |
-| Hidden | 64 neurons, **ReLU** activation |
-| Output | 1 neuron, **Sigmoid** activation (probability of disaster) |
+Install the listed project dependencies in the project's virtual environment:
 
-Training setup:
-- **Optimizer:** Adam
-- **Loss:** Binary cross-entropy
-- **Metric:** Accuracy
-- **Epochs:** 5
-- **Batch size:** 32
+```powershell
+python -m pip install -r requirements.txt
+```
 
-### 7. Evaluate the Neural Network
-- Predictions ≥ **0.5** → disaster (1)
-- Predictions < **0.5** → not disaster (0)
-- Compared against true labels using the same metrics as the baseline
+Open `disaster_social_media_handler.ipynb` in VS Code, select the project `.venv` kernel, and run cells in order. Run the interactive input cell separately when you want to enter your own posts.
 
-### 8. Compare Models
-Accuracies of both models are placed side by side to see whether the neural network improves over the baseline.
+## Project files
 
-### 9. Predict the Test Set
-The neural network labels every tweet in the test file and saves the results to **`submission.csv`**:
-
-| Column | Description |
-|--------|-------------|
-| `id` | Tweet identifier |
-| `target` | Predicted label (0 or 1) |
-
----
-
-## 📊 Results
-
-> Specific accuracy scores are not included in this summary. Run the notebook to generate them.
-
-| Model | Accuracy |
-|-------|----------|
-| Logistic Regression | — |
-| Neural Network | — |
-
----
-
-## 🧠 Concepts Demonstrated
-
-- Text preprocessing
-- TF-IDF feature extraction
-- Binary classification
-- Neural networks
-- ReLU and Sigmoid activation functions
-- Model training
-- Model evaluation (accuracy, precision, recall, F1-score)
-- Generating final predictions
-
----
-
-## 🛠️ How to Run
-
-1. Clone the repo:
-   ```bash
-   git clone https://github.com/YOUR_USERNAME/YOUR_REPO.git
-   cd YOUR_REPO
-
-   pip install pandas scikit-learn tensorflow
-
-   jupyter notebook disaster_tweets.ipynb
-
-
-
----
-
-### What to change before pushing
-
-- Replace `YOUR_USERNAME/YOUR_REPO` with your actual repo path.
-- Rename the notebook file if yours is different (I used `disaster_tweets.ipynb`).
-- Add the accuracy numbers to the **Results** table once you run the notebook.
-- Add a `LICENSE` file if you keep the license section, otherwise delete it.
-
-Want me to also make a shorter version, or one with badges (Python version, TensorFlow, etc.) at the top?
+- `disaster_social_media_handler.ipynb` — training, evaluation, and prediction workflow
+- `train.csv`, `test.csv` — original tweet datasets
+- `social_posts_test.csv` — synthetic labeled social examples, split for augmentation and held-out evaluation
+- `requirements.txt` — direct Python dependencies
+- `submission.csv` — predictions for `test.csv`, generated by the notebook
